@@ -1,12 +1,12 @@
 import streamlit as st
-import google.generativeai as genai
+from google import genai
 from router import handle_user_input
 
 # -------------------------------
 # Konfigurasi Gemini dari Streamlit Secrets
 # -------------------------------
 GEMINI_API_KEY = st.secrets["gemini"]["API_KEY"]
-genai.configure(api_key=GEMINI_API_KEY)
+client = genai.Client(api_key=GEMINI_API_KEY)
 
 # -------------------------------
 # Setup Streamlit Page
@@ -22,15 +22,19 @@ def refine_with_gemini(raw_response):
     Mengubah response JSON menjadi teks natural yang ramah dan jelas.
     """
     prompt = f"""
-    Ubah response JSON berikut menjadi teks jawaban chatbot yang jelas, ramah, dan mudah dipahami.
-    Jangan tampilkan kurung kurawal atau struktur JSON.
+Ubah response JSON berikut menjadi teks jawaban chatbot yang jelas, ramah, dan mudah dipahami.
+Jangan tampilkan kurung kurawal atau struktur JSON.
 
-    Response:
-    {raw_response}
-    """
-    model = genai.GenerativeModel("gemini-1.5-flash")
+Response:
+{raw_response}
+"""
     try:
-        result = model.generate_content(prompt)
+        result = client.generate_text(
+            model="gemini-1.5-flash",
+            prompt=prompt,
+            temperature=0.7,
+            max_output_tokens=500
+        )
         return result.text.strip() if result and result.text else str(raw_response)
     except Exception as e:
         return f"Terjadi kesalahan saat memproses respons: {e}"

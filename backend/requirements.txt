@@ -1,6 +1,6 @@
-genai==2.1.0
 streamlit==1.44.0
 python-dotenv==1.0.1
 google-api-python-client
 gspread==6.2.1
 pypdf==6.0.0
+google-genai
