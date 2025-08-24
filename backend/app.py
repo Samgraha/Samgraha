@@ -1,6 +1,10 @@
 import streamlit as st
+
+st.set_page_config(page_title="Chatbot KTP Test", page_icon="📝")
+
 from google import genai
 from router import handle_user_input
+
 
 # -------------------------------
 # Konfigurasi Gemini dari Streamlit Secrets
@@ -11,7 +15,6 @@ client = genai.Client(api_key=GEMINI_API_KEY)
 # -------------------------------
 # Setup Streamlit Page
 # -------------------------------
-st.set_page_config(page_title="Chatbot KTP Test", page_icon="📝")
 st.title("Chatbot KTP & Tanya Jawab")
 
 # -------------------------------
