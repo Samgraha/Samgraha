@@ -1,15 +1,17 @@
-from typing import Literal, Dict
+import streamlit as st
+from typing import Dict
 from google import genai
-from config import GEMINI_API_KEY
+from google.genai import types
+from PyPDF2 import PdfReader
 import json
+from config import GEMINI_API_KEY
 
+# --- Setup GenAI ---
 if not GEMINI_API_KEY:
-    raise RuntimeError("GEMINI_API_KEY tidak ditemukan di .env")
+    st.error("GEMINI_API_KEY tidak ditemukan di .env")
+    st.stop()
 
-# Konfigurasi client GenAI
 client = genai.Client(api_key=GEMINI_API_KEY)
-
-# Model teks
 _MODEL = "gemini-1.5-flash"
 
 SYSTEM_INTENT = (
@@ -33,34 +35,27 @@ SYSTEM_DOC_CHECK = (
     "Jawab dalam JSON: {\"is_valid\": bool, \"reason\": str, \"confidence\": 0..1}."
 )
 
-
-def classify_intent(message: str) -> Literal["ktp", "tanya"]:
+# --- Fungsi GenAI ---
+def classify_intent(message: str) -> str:
     prompt = f"{SYSTEM_INTENT}\n\nUser: {message}"
-    resp = client.generate_text(
+    resp = client.models.generate_content(
         model=_MODEL,
-        prompt=prompt,
-        temperature=0.0,
-        max_output_tokens=50
+        contents=[prompt],
+        config=types.GenerateContentConfig(thinking_config=types.ThinkingConfig(thinking_budget=0))
     )
-    text = (resp.text or "").strip().lower()
+    text = (resp.output[0].content[0].text or "").strip().lower()
     return "ktp" if "ktp" in text else "tanya"
-
 
 def qa_bandung(question: str) -> str:
     prompt = f"{SYSTEM_QA}\n\nPertanyaan: {question}\nJawaban:"
-    resp = client.generate_text(
+    resp = client.models.generate_content(
         model=_MODEL,
-        prompt=prompt,
-        temperature=0.7,
-        max_output_tokens=500
+        contents=[prompt],
+        config=types.GenerateContentConfig(thinking_config=types.ThinkingConfig(thinking_budget=0))
     )
-    return (resp.text or "Maaf, saya belum menemukan jawabannya.").strip()
-
+    return (resp.output[0].content[0].text or "Maaf, saya belum menemukan jawabannya.").strip()
 
 def validate_doc(kind: str, extracted_text: str, filename: str) -> Dict:
-    """kind in {"kk", "akta", "surat_pengantar"}.
-    Returns dict: {is_valid: bool, reason: str, confidence: float}
-    """
     snippet = extracted_text[:4000]
     prompt = (
         f"{SYSTEM_DOC_CHECK}\n\n"
@@ -69,13 +64,12 @@ def validate_doc(kind: str, extracted_text: str, filename: str) -> Dict:
         f"Isi (potongan):\n{snippet}\n\n"
         f"Keluarkan JSON."
     )
-    resp = client.generate_text(
+    resp = client.models.generate_content(
         model=_MODEL,
-        prompt=prompt,
-        temperature=0.0,
-        max_output_tokens=300
+        contents=[prompt],
+        config=types.GenerateContentConfig(thinking_config=types.ThinkingConfig(thinking_budget=0))
     )
-    raw = resp.text or "{}"
+    raw = (resp.output[0].content[0].text or "{}").strip()
     try:
         data = json.loads(raw)
     except Exception:
@@ -85,3 +79,43 @@ def validate_doc(kind: str, extracted_text: str, filename: str) -> Dict:
         data = {"is_valid": False, "reason": "Format model tidak sesuai", "confidence": 0.0}
 
     return data
+
+def extract_text_from_pdf(file) -> str:
+    reader = PdfReader(file)
+    text = ""
+    for page in reader.pages:
+        text += page.extract_text() or ""
+    return text
+
+# --- Streamlit UI ---
+st.title("Asisten Administrasi Publik Bandung")
+
+user_message = st.text_area("Tulis pertanyaan atau instruksi:")
+
+uploaded_files = st.file_uploader(
+    "Unggah dokumen KTP (KK, Akta, Surat Pengantar)", accept_multiple_files=True, type=["pdf"]
+)
+
+if st.button("Proses"):
+    if not user_message and not uploaded_files:
+        st.warning("Silakan isi pesan atau unggah dokumen.")
+    else:
+        # 1) Tentukan intent
+        intent = classify_intent(user_message)
+        st.info(f"Intent terdeteksi: {intent}")
+
+        # 2) Jika tanya
+        if intent == "tanya" and user_message:
+            jawaban = qa_bandung(user_message)
+            st.success("Jawaban:")
+            st.write(jawaban)
+
+        # 3) Jika KTP, cek dokumen
+        if intent == "ktp" and uploaded_files:
+            for f in uploaded_files:
+                text = extract_text_from_pdf(f)
+                # Bisa coba cek semua jenis, atau minta input user jenis dokumen
+                for kind in ["kk", "akta", "surat_pengantar"]:
+                    result = validate_doc(kind, text, f.name)
+                    st.write(f"File: {f.name}, Jenis cek: {kind}")
+                    st.json(result)

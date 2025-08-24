@@ -63,7 +63,8 @@ def handle_user_input(user_id: str, message: str, files: Dict[str, str]) -> Dict
         try:
             text = extract_text_from_pdf(path)
             sanity = quick_sanity(text)
-            is_valid = validate_doc(kind, text)
+            # update: panggil validate_doc versi GenAI terbaru
+            is_valid = validate_doc(kind, text, os.path.basename(path))
             validation_results[kind] = {"sanity": sanity, "valid": is_valid}
         except Exception as e:
             validation_results[kind] = {"sanity": False, "valid": False, "error": str(e)}
