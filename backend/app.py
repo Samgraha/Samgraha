@@ -5,7 +5,7 @@ from router import handle_user_input
 # -------------------------------
 # Konfigurasi Gemini dari Streamlit Secrets
 # -------------------------------
-GEMINI_API_KEY = st.secrets["gemini"]["API_KEY"]
+GEMINI_API_KEY = st.secrets["vars"]["GEMINI_API_KEY"]
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 # -------------------------------
