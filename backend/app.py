@@ -1,23 +1,25 @@
 import streamlit as st
-import json
 import google.generativeai as genai
 from router import handle_user_input
-from dotenv import load_dotenv
-import os
 
-# Load .env untuk API key Gemini
-load_dotenv()
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+# -------------------------------
+# Konfigurasi Gemini dari Streamlit Secrets
+# -------------------------------
+GEMINI_API_KEY = st.secrets["gemini"]["API_KEY"]
+genai.configure(api_key=GEMINI_API_KEY)
 
+# -------------------------------
+# Setup Streamlit Page
+# -------------------------------
 st.set_page_config(page_title="Chatbot KTP Test", page_icon="📝")
 st.title("Chatbot KTP & Tanya Jawab")
 
-# Konfigurasi Gemini
-genai.configure(api_key=GEMINI_API_KEY)
-
+# -------------------------------
+# Fungsi untuk merapikan response dari Gemini
+# -------------------------------
 def refine_with_gemini(raw_response):
     """
-    Menggunakan Gemini untuk merapikan JSON menjadi teks natural.
+    Mengubah response JSON menjadi teks natural yang ramah dan jelas.
     """
     prompt = f"""
     Ubah response JSON berikut menjadi teks jawaban chatbot yang jelas, ramah, dan mudah dipahami.
@@ -33,22 +35,31 @@ def refine_with_gemini(raw_response):
     except Exception as e:
         return f"Terjadi kesalahan saat memproses respons: {e}"
 
-# Simpan riwayat chat di session_state
+# -------------------------------
+# Session State untuk chat history
+# -------------------------------
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
 user_id = "test_user_001"
 
-# Area upload file
+# -------------------------------
+# Upload File
+# -------------------------------
 uploaded_files = st.file_uploader(
     "Unggah dokumen persyaratan (PDF/JPG/PNG)",
     type=["pdf", "jpg", "jpeg", "png"],
     accept_multiple_files=True
 )
 
-# Area input teks
+# -------------------------------
+# Input Chat
+# -------------------------------
 user_message = st.chat_input("Ketik pesan Anda...")
 
+# -------------------------------
+# Proses Input
+# -------------------------------
 if user_message or uploaded_files:
     files_dict = {}
     if uploaded_files:
@@ -62,17 +73,19 @@ if user_message or uploaded_files:
         files=files_dict
     )
 
-    # Ubah jadi teks natural lewat Gemini
+    # Ubah response JSON jadi teks natural
     bot_message = refine_with_gemini(raw_response)
 
-    # Simpan chat
+    # Simpan ke session_state
     if user_message:
         st.session_state.chat_history.append(("user", user_message))
     if uploaded_files:
         st.session_state.chat_history.append(("user", f"📎 Mengunggah {len(uploaded_files)} file"))
     st.session_state.chat_history.append(("bot", bot_message))
 
+# -------------------------------
 # Tampilkan riwayat chat
+# -------------------------------
 for sender, text in st.session_state.chat_history:
     if sender == "user":
         st.chat_message("user").markdown(text)
