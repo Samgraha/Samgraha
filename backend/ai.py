@@ -1,14 +1,12 @@
-import streamlit as st
+import json
 from typing import Dict
 from google import genai
 from google.genai import types
-import json
 from config import GEMINI_API_KEY
 
 # --- Setup GenAI ---
 if not GEMINI_API_KEY:
-    st.error("GEMINI_API_KEY tidak ditemukan di .env")
-    st.stop()
+    raise RuntimeError("GEMINI_API_KEY tidak ditemukan di .env")
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 _MODEL = "gemini-1.5-flash"
@@ -39,13 +37,13 @@ def classify_intent(message: str) -> str:
     prompt = f"{SYSTEM_INTENT}\n\nUser: {message}"
     resp = client.models.generate_content(
         model=_MODEL,
-        contents=[prompt],  # harus list
+        contents=[prompt],
         config=types.GenerateContentConfig(
             temperature=0.0,
             max_output_tokens=50
         )
     )
-    text = (resp.output[0].content[0].text or "").strip().lower()
+    text = (resp.first_text or "").strip().lower()
     return "ktp" if "ktp" in text else "tanya"
 
 
@@ -59,12 +57,18 @@ def qa_bandung(question: str) -> str:
             max_output_tokens=500
         )
     )
-    return (resp.output[0].content[0].text or "Maaf, saya belum menemukan jawabannya.").strip()
+    return (resp.first_text or "Maaf, saya belum menemukan jawabannya.").strip()
 
 
 def validate_doc(kind: str, extracted_text: str, filename: str) -> Dict:
     snippet = extracted_text[:4000]
-    prompt = f"{SYSTEM_DOC_CHECK}\n\nJenis diminta: {kind}\nNama file: {filename}\nIsi (potongan):\n{snippet}\n\nKeluarkan JSON."
+    prompt = (
+        f"{SYSTEM_DOC_CHECK}\n\n"
+        f"Jenis diminta: {kind}\n"
+        f"Nama file: {filename}\n"
+        f"Isi (potongan):\n{snippet}\n\n"
+        f"Keluarkan JSON."
+    )
     resp = client.models.generate_content(
         model=_MODEL,
         contents=[prompt],
@@ -73,7 +77,7 @@ def validate_doc(kind: str, extracted_text: str, filename: str) -> Dict:
             max_output_tokens=300
         )
     )
-    raw = resp.output[0].content[0].text or "{}"
+    raw = (resp.first_text or "{}").strip()
     try:
         data = json.loads(raw)
     except Exception:
@@ -81,4 +85,5 @@ def validate_doc(kind: str, extracted_text: str, filename: str) -> Dict:
 
     if not isinstance(data, dict) or "is_valid" not in data:
         data = {"is_valid": False, "reason": "Format model tidak sesuai", "confidence": 0.0}
+
     return data
