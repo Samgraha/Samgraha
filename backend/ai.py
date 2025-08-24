@@ -1,15 +1,18 @@
 import json
 from typing import Dict
-from google import genai
-from google.genai import types
+from google import generativeai as genai  # Menggunakan alias yang umum
+from google.generativeai import types
 from config import GEMINI_API_KEY
 
 # --- Setup GenAI ---
 if not GEMINI_API_KEY:
     raise RuntimeError("GEMINI_API_KEY tidak ditemukan di .env")
 
-client = genai.Client(api_key=GEMINI_API_KEY)
-_MODEL = "gemini-1.5-flash"
+# Konfigurasi API key
+genai.configure(api_key=GEMINI_API_KEY)
+
+# Inisialisasi model
+_MODEL = genai.GenerativeModel("gemini-1.5-flash")
 
 SYSTEM_INTENT = (
     "Anda adalah router untuk dua mode: (1) 'ktp' jika pengguna ingin membuat KTP baru, "
@@ -32,32 +35,32 @@ SYSTEM_DOC_CHECK = (
     "Jawab dalam JSON: {\"is_valid\": bool, \"reason\": str, \"confidence\": 0..1}."
 )
 
+# Konfigurasi default untuk generasi konten
+generation_config = types.GenerationConfig(
+    temperature=0.0,
+    max_output_tokens=50
+)
+
 # --- Fungsi GenAI ---
 def classify_intent(message: str) -> str:
     prompt = f"{SYSTEM_INTENT}\n\nUser: {message}"
-    resp = client.models.generate_content(
-        model=_MODEL,
+    resp = _MODEL.generate_content(
         contents=[prompt],
-        config=types.GenerateContentConfig(
-            temperature=0.0,
-            max_output_tokens=50
-        )
+        generation_config=types.GenerationConfig(temperature=0.0, max_output_tokens=50)
     )
-    text = (resp.first_text or "").strip().lower()
+    # PERBAIKAN: Menggunakan resp.text bukan resp.first_text
+    text = (resp.text or "").strip().lower()
     return "ktp" if "ktp" in text else "tanya"
 
 
 def qa_bandung(question: str) -> str:
     prompt = f"{SYSTEM_QA}\n\nPertanyaan: {question}\nJawaban:"
-    resp = client.models.generate_content(
-        model=_MODEL,
+    resp = _MODEL.generate_content(
         contents=[prompt],
-        config=types.GenerateContentConfig(
-            temperature=0.7,
-            max_output_tokens=500
-        )
+        generation_config=types.GenerationConfig(temperature=0.7, max_output_tokens=500)
     )
-    return (resp.first_text or "Maaf, saya belum menemukan jawabannya.").strip()
+    # PERBAIKAN: Menggunakan resp.text bukan resp.first_text
+    return (resp.text or "Maaf, saya belum menemukan jawabannya.").strip()
 
 
 def validate_doc(kind: str, extracted_text: str, filename: str) -> Dict:
@@ -69,21 +72,18 @@ def validate_doc(kind: str, extracted_text: str, filename: str) -> Dict:
         f"Isi (potongan):\n{snippet}\n\n"
         f"Keluarkan JSON."
     )
-    resp = client.models.generate_content(
-        model=_MODEL,
+    resp = _MODEL.generate_content(
         contents=[prompt],
-        config=types.GenerateContentConfig(
-            temperature=0.0,
-            max_output_tokens=300
-        )
+        generation_config=types.GenerationConfig(temperature=0.0, max_output_tokens=300)
     )
-    raw = (resp.first_text or "{}").strip()
+    # PERBAIKAN: Menggunakan resp.text bukan resp.first_text
+    raw = (resp.text or "{}").strip()
     try:
         data = json.loads(raw)
-    except Exception:
-        data = {"is_valid": False, "reason": "Gagal parsing respons model", "confidence": 0.0}
+    except json.JSONDecodeError: # Lebih spesifik menangkap error JSON
+        data = {"is_valid": False, "reason": "Gagal parsing respons model (JSON tidak valid)", "confidence": 0.0}
 
     if not isinstance(data, dict) or "is_valid" not in data:
-        data = {"is_valid": False, "reason": "Format model tidak sesuai", "confidence": 0.0}
+        data = {"is_valid": False, "reason": "Format respons model tidak sesuai", "confidence": 0.0}
 
     return data
