@@ -1,7 +1,7 @@
 import streamlit as st
 from typing import Dict
 from google import genai
-from PyPDF2 import PdfReader
+from google.genai import types
 import json
 from config import GEMINI_API_KEY
 
@@ -37,47 +37,46 @@ SYSTEM_DOC_CHECK = (
 # --- Fungsi GenAI ---
 def classify_intent(message: str) -> str:
     prompt = f"{SYSTEM_INTENT}\n\nUser: {message}"
-    resp = client.generate_text(
+    resp = client.models.generate_content(
         model=_MODEL,
-        prompt=prompt,
-        temperature=0.0,
-        max_output_tokens=50
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            temperature=0.0,
+            max_output_tokens=50
+        )
     )
     text = (resp.text or "").strip().lower()
     return "ktp" if "ktp" in text else "tanya"
 
+
 def qa_bandung(question: str) -> str:
     prompt = f"{SYSTEM_QA}\n\nPertanyaan: {question}\nJawaban:"
-    resp = client.generate_text(
+    resp = client.models.generate_content(
         model=_MODEL,
-        prompt=prompt,
-        temperature=0.7,
-        max_output_tokens=500
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            temperature=0.7,
+            max_output_tokens=500
+        )
     )
     return (resp.text or "Maaf, saya belum menemukan jawabannya.").strip()
 
 def validate_doc(kind: str, extracted_text: str, filename: str) -> Dict:
     snippet = extracted_text[:4000]
-    prompt = (
-        f"{SYSTEM_DOC_CHECK}\n\n"
-        f"Jenis diminta: {kind}\n"
-        f"Nama file: {filename}\n"
-        f"Isi (potongan):\n{snippet}\n\n"
-        f"Keluarkan JSON."
-    )
-    resp = client.generate_text(
+    prompt = f"{SYSTEM_DOC_CHECK}\n\nJenis diminta: {kind}\nNama file: {filename}\nIsi (potongan):\n{snippet}\n\nKeluarkan JSON."
+    resp = client.models.generate_content(
         model=_MODEL,
-        prompt=prompt,
-        temperature=0.0,
-        max_output_tokens=300
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            temperature=0.0,
+            max_output_tokens=300
+        )
     )
-    raw = (resp.text or "{}").strip()
+    raw = resp.text or "{}"
     try:
         data = json.loads(raw)
     except Exception:
         data = {"is_valid": False, "reason": "Gagal parsing respons model", "confidence": 0.0}
-
     if not isinstance(data, dict) or "is_valid" not in data:
         data = {"is_valid": False, "reason": "Format model tidak sesuai", "confidence": 0.0}
-
     return data
