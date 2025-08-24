@@ -39,10 +39,7 @@ def handle_user_input(user_id: str, message: str, files: Dict[str, str]) -> Dict
 
     if intent == "tanya":
         answer = qa_bandung(message)
-        return {
-            "mode": "tanya",
-            "answer": answer,
-        }
+        return answer
 
     # 2) Flow untuk pembuatan KTP
     provided = {k: files.get(k) for k in REQUIRED_FILES.keys()}
