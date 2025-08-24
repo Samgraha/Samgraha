@@ -1,5 +1,4 @@
 genai==2.1.0
-tiktoken==0.5.2  # versi terbaru yang ada untuk Linux
 streamlit==1.44.0
 python-dotenv==1.0.1
 google-api-python-client
